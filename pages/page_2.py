@@ -45,7 +45,7 @@ def to_excel(df):
     for col_num, value in enumerate(df.columns.values):
         worksheet.write(0, col_num, value, header_format)
     worksheet.set_column('A:ZZ', 25)
-    writer.save()
+    writer.close()
     processed_data = output.getvalue()
     return processed_data
 
