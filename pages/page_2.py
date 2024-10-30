@@ -92,13 +92,28 @@ with var:
 def geocode_with_retry(query, retries=3, delay=2):
     for attempt in range(retries):
         try:
-            location = geolocator.geocode (query, timeout=10)
+            location = geolocator.ge ocode (query, timeout=10)
             return location
         except (GeocoderTimedOut, GeocoderServiceError) as e:
             if attempt < retries - 1:
                 time.sleep(delay)  # Wait before retrying
             else:
                 raise  # Reraise the last exception if all retries fail
+
+def batch_geocode(addresses, batch_size=100):
+    """Geocode a list of addresses in batches."""
+    results = []
+    for i in range(0, len(addresses), batch_size):
+        batch = addresses[i:i+batch_size]
+        batch_results = []
+        for address in batch:
+            location = geocode_with_retry(address)
+            if location:
+                batch_results.append((location.latitude, location.longitude))
+            else:
+                batch_results.append((None, None))
+        results.extend(batch_results)
+    return results
 
 def coor():
     st.session_state["df"] = pd.DataFrame(pd.read_excel(uploaded_file))  # , dtype={'data_update': datetime.datetime})
@@ -132,37 +147,12 @@ def coor():
         st.session_state["df"]['Completed_Address'] = Ad
     else:
         Ad = st.session_state["df"]['Completed_Address']
-    Longi = []
-    Lati = []
-    le = []
-    tr = []
-    for i in st.session_state["df"].index:
-        st.empty()
-        with cons1:
-            st.info("Dear user we are searching for address number :red[**{}**] from a total of :green[**{}**]".format(i + 1, len(st.session_state["df"])))
-        j = Ad[i]
-        location = geocode_with_retry(j)
-        le.append(len(j))
-        t = 0
-        while location is None:
-            if len(j) > 5:
-                j = j[0:len(j) - 1]
-                t += 1
-                location = geocode_with_retry(j)
-            else:
-                Longi.append(0)
-                Lati.append(0)
-                break
-        else:
-            tr.append(t)
-            Longi.append(location.longitude)
-            Lati.append(location.latitude)
-    cons1.empty()
-    st.session_state["df"]["Longitude"] = Longi
-    st.session_state["df"]["Latitude"] = Lati
-    st.session_state["df"]["precision"] = [(x1 - x2) / x1 for (x1, x2) in zip(le, tr)]
-    st.session_state["df"]["Length"] = le
-    st.session_state["df"]["number of tries"] = tr
+    results = batch_geocode(Ad)
+    st.session_state["df"]["Longitude"] = [r[0] for r in results]
+    st.session_state["df"]["Latitude"] = [r[1] for r in results]
+    st.session_state["df"]["precision"] = [''] * len(st.session_state["df"])
+    st.session_state["df"]["Length"] = [''] * len(st.session_state["df"])
+    st.session_state["df"]["number of tries"] = [''] * len(st.session_state["df"])
     st.session_state['final_file'] = to_excel(st.session_state["df"])
     st.session_state['s'] = 1
 
@@ -170,4 +160,3 @@ if (uploaded_file is not None) and (st.session_state['s'] == 0):
     with var1:
         st.success(f"### File is successfully uploaded!")
         st.button('search for coordinates', on_click=coor)
-        # st.empty()
