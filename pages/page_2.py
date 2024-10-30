@@ -4,9 +4,7 @@ import math
 from functools import partial
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
-from PIL import Image
 from io import BytesIO
-from pyxlsb import open_workbook as open_xlsb
 import datetime
 from datetime import date
 import time
@@ -89,74 +87,46 @@ with var:
         st.download_button("Press to Download", st.session_state['final_file'], "Output_{}.xlsx".format(today.strftime("%m_%d_%y")), "text/csv", key='download-excel')
         st.session_state['s'] = 2
 
+@st.cache_data
 def geocode_with_retry(query, retries=3, delay=2):
+    """Geocode a single address with retry logic."""
     for attempt in range(retries):
         try:
-            location = geolocator.geocode (query, timeout=10)
+            location = geolocator.geocode(query, timeout=10)
             return location
         except (GeocoderTimedOut, GeocoderServiceError) as e:
             if attempt < retries - 1:
-                time.sleep(delay)  # Wait before retrying
+                time.sleep(delay)
+                delay *= 2  # Exponential backoff
             else:
-                raise  # Reraise the last exception if all retries fail
+                raise e
 
-def batch_geocode(addresses, batch_size=100):
-    """Geocode a list of addresses in batches."""
+@st.cache_data
+def geocode_addresses(addresses):
+    """Geocode a list of addresses."""
     results = []
-    for i in range(0, len(addresses), batch_size):
-        batch = addresses[i:i+batch_size]
-        batch_results = []
-        for address in batch:
-            location = geocode_with_retry(address)
-            if location:
-                batch_results.append((location.latitude, location.longitude))
-            else:
-                batch_results.append((None, None))
-        results.extend(batch_results)
+    for address in addresses:
+        location = geocode_with_retry(address)
+        results.append((location.latitude, location.longitude) if location else (None, None))
     return results
 
 def coor():
-    st.session_state["df"] = pd.DataFrame(pd.read_excel(uploaded_file))  # , dtype={'data_update': datetime.datetime})
-    st.session_state["df"] = st.session_state["df"].fillna(" ")
-    st.session_state["df"]['Longitude'] = [''] * len(st.session_state["df"])
-    st.session_state["df"]['Latitude'] = [''] * len(st.session_state["df"])
-    st.session_state["df"]['precision'] = [''] * len(st.session_state["df"])
-    st.session_state["df"]['Length'] = [''] * len(st.session_state["df"])
-    st.session_state["df"]['number of tries'] = [''] * len(st.session_state["df"])
-    if 'Completed_Address' not in st.session_state["df"].columns:
-        st.session_state["df"]['Completed_Address'] = [''] * len(st.session_state["df"])
-        if 'Country' not in st.session_state["df"].columns:
-            st.session_state["df"]['Country'] = [''] * len(st.session_state["df"])
-        if 'City' not in st.session_state["df"].columns:
-            st.session_state["df"]['City'] = [''] * len(st.session_state["df"])
-        if 'Address' not in st.session_state["df"].columns:
-            st.session_state["df"]['Address'] = [''] * len(st.session_state["df"])
-        if 'Number' not in st.session_state["df"].columns:
-            st.session_state["df"]['Number'] = [''] * len(st.session_state["df"])
-        Ad = []
-        for i in st.session_state["df"].index:
-            if not isnan(st.session_state["df"]['Country'][i]):
-                A = str(st.session_state["df"]['Country'][i])
-            if not isnan(st.session_state["df"]['City'][i]):
-                A = A + ', ' + str(st.session_state["df"]['City'][i])
-            if not isnan(st.session_state["df"]['Address'][i]):
-                A = A + ', ' + str(st.session_state["df"]['Address'][i])
-            if not isnan(st.session_state["df"]['Number'][i]):
-                A = A + ' ' + str(st.session_state["df"]['Number'][i])
-            Ad.append(A)
-        st.session_state["df"]['Completed_Address'] = Ad
-    else:
-        Ad = st.session_state["df"]['Completed_Address']
-    results = batch_geocode(Ad)
-    st.session_state["df"]["Longitude"] = [r[0] for r in results]
-    st.session_state["df"]["Latitude"] = [r[1] for r in results]
-    st.session_state["df"]["precision"] = [''] * len(st.session_state["df"])
-    st.session_state["df"]["Length"] = [''] * len(st.session_state["df"])
-    st.session_state["df"]["number of tries"] = [''] * len(st.session_state["df"])
+    # Load and prepare data
+    addresses = st.session_state["df"]['Completed_Address'].tolist()
+    results = geocode_addresses(addresses)
+    st.session_state["df"]["Longitude"], st.session_state["df"]["Latitude"] = zip(*results)
+    # Convert DataFrame to Excel
     st.session_state['final_file'] = to_excel(st.session_state["df"])
-    st.session_state['s'] = 1
 
-if (uploaded_file is not None) and (st.session_state['s'] == 0):
-    with var1:
-        st.success(f"### File is successfully uploaded!")
-        st.button('search for coordinates', on_click=coor)
+if uploaded_file is not None:
+    st.session_state["df"] = pd.read_excel(uploaded_file, sheet_name='Sheet1')
+    if 'Completed_Address' in st.session_state["df"]:
+        if st.button("Press to start"):
+            st.session_state['s'] = 1
+            coor()
+    else:
+        st.session_state["df"]["Completed_Address"] = st.session_state["df"].apply(
+            lambda row: f"{row['Country']} {row['City']} {row['Address']} {row['Number']}", axis=1)
+        if st.button("Press to start"):
+            st.session_state['s'] = 1
+            coor()
