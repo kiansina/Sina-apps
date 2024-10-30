@@ -92,7 +92,7 @@ with var:
 def geocode_with_retry(query, retries=3, delay=2):
     for attempt in range(retries):
         try:
-            location = geolocator.ge ocode (query, timeout=10)
+            location = geolocator.geocode (query, timeout=10)
             return location
         except (GeocoderTimedOut, GeocoderServiceError) as e:
             if attempt < retries - 1:
