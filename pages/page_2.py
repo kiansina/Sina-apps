@@ -157,7 +157,7 @@ def coor():
         with cons1:
             st.info("Dear user we are searching for address number :red[**{}**] from a total of :green[**{}**]".format(i+1,len(st.session_state["df"])))
         j=Ad[i]
-        location=geolocator.geocode(j,timeout=10)  #location=geolocator.geocode(i,timeout=10)
+        location=geolocator.geocode(j,timeout=30)  #location=geolocator.geocode(i,timeout=10)
         le.append(len(j))
         t=0
         while location is None:
