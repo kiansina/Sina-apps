@@ -84,7 +84,7 @@ with var:
         st.download_button("Download sample2 input", sample2, "sample2_input.xlsx", "text/csv", key='download-sample2')
     uploaded_file = st.file_uploader("Upload your file", type="xlsx", on_change=cha)
     if st.session_state['s'] == 1:
-        st.download_button("Press to Download", st.session_state['final_file'], "Output_{}.xlsx".format(today.strftime("%m_%d_%y")), "text/csv", key='download-excel')
+        st.download_button("Press to Download", st.session_state['final_file'], "Output_{}.xlsx".format(today.strftime("%m _%d_%y")), "text/csv", key='download-excel')
         st.session_state['s'] = 2
 
 @st.cache_data
@@ -107,7 +107,10 @@ def geocode_addresses(addresses):
     results = []
     for address in addresses:
         location = geocode_with_retry(address)
-        results.append((location.latitude, location.longitude) if location else (None, None))
+        if location:
+            results.append((location.latitude, location.longitude))
+        else:
+            results.append((None, None))
     return results
 
 def coor():
